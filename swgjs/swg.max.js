@@ -2457,7 +2457,7 @@ var ClientEventManagerApi = /*#__PURE__*/function () {
 
 exports.ClientEventManagerApi = ClientEventManagerApi;
 
-},{"../proto/api_messages":33}],6:[function(require,module,exports){
+},{"../proto/api_messages":32}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2573,15 +2573,13 @@ var DeferredAccountCreationResponse = /*#__PURE__*/function () {
 
 exports.DeferredAccountCreationResponse = DeferredAccountCreationResponse;
 
-},{"./entitlements":7,"./subscribe-response":12,"./user-data":14}],7:[function(require,module,exports){
+},{"./entitlements":7,"./subscribe-response":11,"./user-data":13}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Entitlement = exports.Entitlements = exports.GOOGLE_METERING_SOURCE = void 0;
-
-var _object = require("../utils/object");
+exports.Entitlement = exports.Entitlements = void 0;
 
 var _json = require("../utils/json");
 
@@ -2593,14 +2591,9 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
-/** Source for Google-provided metering entitlements. */
-var GOOGLE_METERING_SOURCE = 'google:metering';
 /**
  * The holder of the entitlements for a service.
  */
-
-exports.GOOGLE_METERING_SOURCE = GOOGLE_METERING_SOURCE;
-
 var Entitlements = /*#__PURE__*/function () {
   /**
    * @param {string} service
@@ -2608,11 +2601,10 @@ var Entitlements = /*#__PURE__*/function () {
    * @param {!Array<!Entitlement>} entitlements
    * @param {?string} currentProduct
    * @param {function(!Entitlements)} ackHandler
-   * @param {function(!Entitlements, ?Function=)} consumeHandler
    * @param {?boolean|undefined} isReadyToPay
    * @param {?string|undefined} decryptedDocumentKey
    */
-  function Entitlements(service, raw, entitlements, currentProduct, ackHandler, consumeHandler, isReadyToPay, decryptedDocumentKey) {
+  function Entitlements(service, raw, entitlements, currentProduct, ackHandler, isReadyToPay, decryptedDocumentKey) {
     _classCallCheck(this, Entitlements);
 
     /** @const {string} */
@@ -2635,9 +2627,6 @@ var Entitlements = /*#__PURE__*/function () {
     /** @private @const {function(!Entitlements)} */
 
     this.ackHandler_ = ackHandler;
-    /** @private @const {function(!Entitlements, ?Function=)} */
-
-    this.consumeHandler_ = consumeHandler;
   }
   /**
    * @return {!Entitlements}
@@ -2649,7 +2638,7 @@ var Entitlements = /*#__PURE__*/function () {
     value: function clone() {
       return new Entitlements(this.service, this.raw, this.entitlements.map(function (ent) {
         return ent.clone();
-      }), this.product_, this.ackHandler_, this.consumeHandler_, this.isReadyToPay, this.decryptedDocumentKey);
+      }), this.product_, this.ackHandler_, this.isReadyToPay, this.decryptedDocumentKey);
     }
     /**
      * @return {!Object}
@@ -2665,35 +2654,6 @@ var Entitlements = /*#__PURE__*/function () {
         }),
         'isReadyToPay': this.isReadyToPay
       };
-    }
-    /**
-     * Returns true if the current article is unlocked by a
-     * cacheable entitlement. Metering entitlements aren't cacheable,
-     * because each metering entitlement is meant to be used for one article.
-     * Subscription entitlements are cacheable, because subscription entitlements
-     * are meant to be used across multiple articles on a publication.
-     * @return {boolean}
-     */
-
-  }, {
-    key: "enablesThisWithCacheableEntitlements",
-    value: function enablesThisWithCacheableEntitlements() {
-      var entitlement = this.getEntitlementForThis();
-      return !!entitlement && entitlement.source !== GOOGLE_METERING_SOURCE;
-    }
-    /**
-     * Returns true if the current article is unlocked by a
-     * Google metering entitlement. These entitlements come
-     * from Google News Intiative's licensing program to support news.
-     * https://www.blog.google/outreach-initiatives/google-news-initiative/licensing-program-support-news-industry-/
-     * @return {boolean}
-     */
-
-  }, {
-    key: "enablesThisWithGoogleMetering",
-    value: function enablesThisWithGoogleMetering() {
-      var entitlement = this.getEntitlementForThis();
-      return !!entitlement && entitlement.source === GOOGLE_METERING_SOURCE;
     }
     /**
      * @param {string=} source
@@ -2753,10 +2713,6 @@ var Entitlements = /*#__PURE__*/function () {
     /**
      * Returns the first matching entitlement for the specified product,
      * optionally also matching the specified source.
-     *
-     * Returns non-metering entitlements if possible, to avoid consuming
-     * metered reads unnecessarily.
-     *
      * @param {?string} product
      * @param {string=} source
      * @return {?Entitlement}
@@ -2765,26 +2721,15 @@ var Entitlements = /*#__PURE__*/function () {
   }, {
     key: "getEntitlementFor",
     value: function getEntitlementFor(product, source) {
-      if (!product) {
-        return null;
-      } // Prefer subscription entitlements over metering entitlements.
-      // Metering entitlements are a limited resource. When a metering entitlement
-      // unlocks an article, that depletes the user's remaining "free reads".
-      // Subscription entitlements are *not* depleted when they unlock articles.
-      // They are essentially unlimited if the subscription remains valid.
-      // For this reason, subscription entitlements are preferred.
+      if (product && this.entitlements.length > 0) {
+        for (var i = 0; i < this.entitlements.length; i++) {
+          if (this.entitlements[i].enables(product) && (!source || source == this.entitlements[i].source)) {
+            return this.entitlements[i];
+          }
+        }
+      }
 
-
-      var entitlementsThatUnlockArticle = this.entitlements.filter(function (entitlement) {
-        return entitlement.enables(product) && (!source || source === entitlement.source);
-      });
-      var subscriptionEntitlement = (0, _object.findInArray)(entitlementsThatUnlockArticle, function (entitlement) {
-        return entitlement.source !== GOOGLE_METERING_SOURCE;
-      });
-      var meteringEntitlement = (0, _object.findInArray)(entitlementsThatUnlockArticle, function (entitlement) {
-        return entitlement.source === GOOGLE_METERING_SOURCE;
-      });
-      return subscriptionEntitlement || meteringEntitlement || null;
+      return null;
     }
     /**
      * Returns the first matching entitlement for the specified source w/o
@@ -2815,19 +2760,6 @@ var Entitlements = /*#__PURE__*/function () {
     key: "ack",
     value: function ack() {
       this.ackHandler_(this);
-    }
-    /**
-     * A 3p site should call this method to consume a Google metering entitlement.
-     * When a metering entitlement is consumed, SwG shows the user a metering dialog.
-     * When the user closes the dialog, SwG depletes one of the user's remaining
-     * "free reads".
-     * @param {?Function=} onCloseDialog Called after the user closes the dialog.
-     */
-
-  }, {
-    key: "consume",
-    value: function consume(onCloseDialog) {
-      this.consumeHandler_(this, onCloseDialog);
     }
   }]);
 
@@ -2966,7 +2898,7 @@ var Entitlement = /*#__PURE__*/function () {
 
 exports.Entitlement = Entitlement;
 
-},{"../utils/json":76,"../utils/log":78,"../utils/object":79}],8:[function(require,module,exports){
+},{"../utils/json":72,"../utils/log":74}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3265,37 +3197,6 @@ exports.LoggerApi = LoggerApi;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.MeterClientTypes = void 0;
-
-/**
- * Copyright 2018 The Subscribe with Google Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/** @enum {number}  */
-var MeterClientTypes = {
-  /** Meter client type for content licensed by Google. */
-  LICENSED_BY_GOOGLE: 1
-};
-exports.MeterClientTypes = MeterClientTypes;
-
-},{}],10:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
 exports.Offer = void 0;
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -3343,7 +3244,7 @@ function Offer(skuId, title, description, price) {
 
 exports.Offer = Offer;
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3365,19 +3266,15 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
-
-function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
-
-function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
-
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
-function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
-
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
 
 /**
  * @enum {string}
@@ -3509,12 +3406,10 @@ exports.SubscriptionState = SubscriptionState;
 var PropensityApi = /*#__PURE__*/function (_LoggerApi$LoggerApi) {
   _inherits(PropensityApi, _LoggerApi$LoggerApi);
 
-  var _super = _createSuper(PropensityApi);
-
   function PropensityApi() {
     _classCallCheck(this, PropensityApi);
 
-    return _super.apply(this, arguments);
+    return _possibleConstructorReturn(this, _getPrototypeOf(PropensityApi).apply(this, arguments));
   }
 
   _createClass(PropensityApi, [{
@@ -3535,7 +3430,7 @@ var PropensityApi = /*#__PURE__*/function (_LoggerApi$LoggerApi) {
 
 exports.PropensityApi = PropensityApi;
 
-},{"./logger-api":8}],12:[function(require,module,exports){
+},{"./logger-api":8}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3696,28 +3591,26 @@ var PurchaseData = /*#__PURE__*/function () {
 
 exports.PurchaseData = PurchaseData;
 
-},{"./entitlements":7,"./user-data":14}],13:[function(require,module,exports){
+},{"./entitlements":7,"./user-data":13}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.defaultConfig = defaultConfig;
-exports.SubscriptionRequest = exports.SmartButtonOptions = exports.ButtonOptions = exports.SaveSubscriptionRequestCallback = exports.SaveSubscriptionRequest = exports.LoginRequest = exports.OffersRequest = exports.ProductType = exports.ReplaceSkuProrationMode = exports.WindowOpenMode = exports.AnalyticsMode = exports.GetEntitlementsMeteringParamsExternal = exports.GetEntitlementsParamsExternalDef = exports.GetEntitlementsMeteringParamsInternal = exports.GetEntitlementsEncryptionParams = exports.GetEntitlementsParamsInternalDef = exports.Config = exports.SubscriptionFlows = exports.Subscriptions = void 0;
-
-var _clientEventManagerApi = require("./client-event-manager-api");
-
-var _deferredAccountCreation = require("./deferred-account-creation");
+exports.SubscriptionRequest = exports.SmartButtonOptions = exports.ButtonOptions = exports.SaveSubscriptionRequestCallback = exports.SaveSubscriptionRequest = exports.LoginRequest = exports.OffersRequest = exports.ProductType = exports.ReplaceSkuProrationMode = exports.WindowOpenMode = exports.AnalyticsMode = exports.Config = exports.SubscriptionFlows = exports.Subscriptions = void 0;
 
 var _entitlements = require("./entitlements");
 
-var _loggerApi = require("./logger-api");
-
 var _offer = require("./offer");
+
+var _deferredAccountCreation = require("./deferred-account-creation");
+
+var _subscribeResponse = require("./subscribe-response");
 
 var _propensityApi = require("./propensity-api");
 
-var _subscribeResponse = require("./subscribe-response");
+var _loggerApi = require("./logger-api");
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -3774,13 +3667,13 @@ var Subscriptions = /*#__PURE__*/function () {
     key: "clear",
     value: function clear() {}
     /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      */
 
   }, {
     key: "getEntitlements",
-    value: function getEntitlements(params) {}
+    value: function getEntitlements(encryptedDocumentKey) {}
     /**
      * Set the subscribe callback.
      * @param {function(!Promise<!Entitlements>)} callback
@@ -3920,13 +3813,6 @@ var Subscriptions = /*#__PURE__*/function () {
     key: "setOnLoginRequest",
     value: function setOnLoginRequest(callback) {}
     /**
-     * @param {!LoginRequest} request
-     */
-
-  }, {
-    key: "triggerLoginRequest",
-    value: function triggerLoginRequest(request) {}
-    /**
      * Starts the login prompt flow.
      * @return {!Promise}
      */
@@ -3957,15 +3843,6 @@ var Subscriptions = /*#__PURE__*/function () {
   }, {
     key: "waitForSubscriptionLookup",
     value: function waitForSubscriptionLookup(accountPromise) {}
-    /**
-     * Starts the metered registration wall flow.
-     * @param {{ gsiUrl: string, alreadyRegisteredUrl: string}} params
-     * @return {!Promise}
-     */
-
-  }, {
-    key: "showMeterRegwall",
-    value: function showMeterRegwall(params) {}
     /**
      * Starts the Account linking flow.
      * TODO(dparikh): decide if it's only exposed for testing or PROD purposes.
@@ -4065,11 +3942,6 @@ var Subscriptions = /*#__PURE__*/function () {
   }, {
     key: "getLogger",
     value: function getLogger() {}
-    /** @return {!Promise<ClientEventManagerApi>} */
-
-  }, {
-    key: "getEventManager",
-    value: function getEventManager() {}
   }]);
 
   return Subscriptions;
@@ -4088,9 +3960,7 @@ var SubscriptionFlows = {
   COMPLETE_DEFERRED_ACCOUNT_CREATION: 'completeDeferredAccountCreation',
   LINK_ACCOUNT: 'linkAccount',
   SHOW_LOGIN_PROMPT: 'showLoginPrompt',
-  SHOW_METER_REGWALL: 'showMeterRegwall',
-  SHOW_LOGIN_NOTIFICATION: 'showLoginNotification',
-  SHOW_METER_TOAST: 'showMeterToast'
+  SHOW_LOGIN_NOTIFICATION: 'showLoginNotification'
 };
 /**
  * Configuration properties:
@@ -4118,86 +3988,10 @@ var SubscriptionFlows = {
 exports.SubscriptionFlows = SubscriptionFlows;
 var Config;
 /**
- * Params for GetEntitlements requests to SwG Client.
- * swg-js constructs objects of this type, but publisher JS won't.
- * swg-js converts these params to a Base64 JSON string
- * before sending them to SwG Client.
- * @typedef {{
- *   metering: (!GetEntitlementsMeteringParamsInternal|undefined),
- * }}
- */
-
-exports.Config = Config;
-var GetEntitlementsParamsInternalDef;
-/**
- * Encryption params for GetEntitlements requests.
- * @typedef {{
- *   encryptedDocumentKey: string,
- * }}
- */
-
-exports.GetEntitlementsParamsInternalDef = GetEntitlementsParamsInternalDef;
-var GetEntitlementsEncryptionParams;
-/**
- * Metering params for GetEntitlements requests to SwG Client.
- * swg-js constructs objects of this type, but publisher JS won't.
- * @typedef {{
- *   clientTypes: !Array<number>,
- *   owner: string,
- *   state: {
- *     id: string,
- *     attributes: !Array<{
- *       name: string,
- *       timestamp: number,
- *     }>,
- *   },
- *   resource: {
- *     hashedCanonicalUrl: string,
- *   },
- * }}
- */
-
-exports.GetEntitlementsEncryptionParams = GetEntitlementsEncryptionParams;
-var GetEntitlementsMeteringParamsInternal;
-/**
- * Params for `getEntitlements` calls from publisher JS.
- * swg-js converts objects of this type to GetEntitlementsParamsInternal.
- * @typedef {{
- *   encryption: (!GetEntitlementsEncryptionParams|undefined),
- *   metering: (!GetEntitlementsMeteringParamsExternal|undefined),
- * }}
- */
-
-exports.GetEntitlementsMeteringParamsInternal = GetEntitlementsMeteringParamsInternal;
-var GetEntitlementsParamsExternalDef;
-/**
- * Params for `getEntitlements` calls from publisher JS.
- * swg-js converts objects of this type to GetEntitlementsMeteringParamsInternal.
- * @typedef {{
- *   clientTypes: !Array<number>,
- *   owner: string,
- *   state: {
- *     id: string,
- *     standardAttributes: !Object<string, {
- *       timestamp: number,
- *     }>,
- *     customAttributes: !Object<string, {
- *       timestamp: number,
- *     }>,
- *   },
- *   resource: {
- *     hashedCanonicalUrl: string,
- *   },
- * }}
- */
-
-exports.GetEntitlementsParamsExternalDef = GetEntitlementsParamsExternalDef;
-var GetEntitlementsMeteringParamsExternal;
-/**
  * @enum {number}
  */
 
-exports.GetEntitlementsMeteringParamsExternal = GetEntitlementsMeteringParamsExternal;
+exports.Config = Config;
 var AnalyticsMode = {
   DEFAULT: 0,
   IMPRESSIONS: 1
@@ -4347,7 +4141,7 @@ exports.SmartButtonOptions = SmartButtonOptions;
 var SubscriptionRequest;
 exports.SubscriptionRequest = SubscriptionRequest;
 
-},{"./client-event-manager-api":5,"./deferred-account-creation":6,"./entitlements":7,"./logger-api":8,"./offer":10,"./propensity-api":11,"./subscribe-response":12}],14:[function(require,module,exports){
+},{"./deferred-account-creation":6,"./entitlements":7,"./logger-api":8,"./offer":9,"./propensity-api":10,"./subscribe-response":11}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4448,7 +4242,7 @@ var UserData = /*#__PURE__*/function () {
 
 exports.UserData = UserData;
 
-},{}],15:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4462,19 +4256,15 @@ var _activityPorts = require("web-activities/activity-ports");
 
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
-
-function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
-
-function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
-
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
-function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
-
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -4511,12 +4301,10 @@ exports.ActivityPortDef = ActivityPortDef;
 var ActivityPort = /*#__PURE__*/function (_ActivityPortDef) {
   _inherits(ActivityPort, _ActivityPortDef);
 
-  var _super = _createSuper(ActivityPort);
-
   function ActivityPort() {
     _classCallCheck(this, ActivityPort);
 
-    return _super.apply(this, arguments);
+    return _possibleConstructorReturn(this, _getPrototypeOf(ActivityPort).apply(this, arguments));
   }
 
   _createClass(ActivityPort, [{
@@ -4839,7 +4627,7 @@ var ActivityPorts = /*#__PURE__*/function () {
         'analyticsContext': context.toArray(),
         'publicationId': pageConfig.getPublicationId(),
         'productId': pageConfig.getProductId(),
-        '_client': 'SwG 0.1.22-1602710098364',
+        '_client': 'SwG 0.1.22-1603842716914',
         'supportsEventManager': true
       }, args || {});
     }
@@ -4981,7 +4769,7 @@ var ActivityPorts = /*#__PURE__*/function () {
 
 exports.ActivityPorts = ActivityPorts;
 
-},{"../proto/api_messages":33,"web-activities/activity-ports":4}],16:[function(require,module,exports){
+},{"../proto/api_messages":32,"web-activities/activity-ports":4}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -5154,7 +4942,7 @@ var DialogManager = /*#__PURE__*/function () {
 
 exports.DialogManager = DialogManager;
 
-},{"../utils/errors":74,"./dialog":17,"./graypane":19}],17:[function(require,module,exports){
+},{"../utils/errors":70,"./dialog":16,"./graypane":18}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -5747,7 +5535,7 @@ var Dialog = /*#__PURE__*/function () {
 
 exports.Dialog = Dialog;
 
-},{"../../build/css/ui/ui.css":2,"../model/doc":22,"../ui/loading-view":65,"../utils/animation":68,"../utils/dom":72,"../utils/style":83,"./friendly-iframe":18,"./graypane":19}],18:[function(require,module,exports){
+},{"../../build/css/ui/ui.css":2,"../model/doc":21,"../ui/loading-view":62,"../utils/animation":65,"../utils/dom":68,"../utils/style":79,"./friendly-iframe":17,"./graypane":18}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -5868,7 +5656,7 @@ var FriendlyIframe = /*#__PURE__*/function () {
 
 exports.FriendlyIframe = FriendlyIframe;
 
-},{"../utils/dom":72,"../utils/style":83}],19:[function(require,module,exports){
+},{"../utils/dom":68,"../utils/style":79}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -6002,7 +5790,7 @@ var Graypane = /*#__PURE__*/function () {
 
 exports.Graypane = Graypane;
 
-},{"../utils/animation":68,"../utils/style":83}],20:[function(require,module,exports){
+},{"../utils/animation":65,"../utils/style":79}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -6069,8 +5857,8 @@ var View = /*#__PURE__*/function () {
 
   }, {
     key: "resized",
-    value: function resized() {// Do nothing by default. Override if needed.
-    }
+    value: function resized() {} // Do nothing by default. Override if needed.
+
     /**
      * Accept the result.
      * @return {!Promise}
@@ -6103,7 +5891,7 @@ var View = /*#__PURE__*/function () {
 
 exports.View = View;
 
-},{}],21:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 
 require("./polyfills");
@@ -6132,10 +5920,10 @@ var _log = require("./utils/log");
  * @fileoverview
  * The entry point for runtime (swg.js).
  */
-(0, _log.log)('Subscriptions Runtime: 0.1.22-1602710098364');
+(0, _log.log)('Subscriptions Runtime: 0.1.22-1603842716914');
 (0, _runtime.installRuntime)(self);
 
-},{"./polyfills":25,"./runtime/runtime":59,"./utils/log":78}],22:[function(require,module,exports){
+},{"./polyfills":24,"./runtime/runtime":56,"./utils/log":74}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -6362,7 +6150,7 @@ function resolveDoc(input) {
   );
 }
 
-},{"../utils/document-ready":71}],23:[function(require,module,exports){
+},{"../utils/document-ready":67}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7013,7 +6801,7 @@ function getDocClassForTesting() {
   return _doc.Doc;
 }
 
-},{"../utils/dom":72,"../utils/error-logger":73,"../utils/json":76,"../utils/log":78,"./doc":22,"./page-config":24}],24:[function(require,module,exports){
+},{"../utils/dom":68,"../utils/error-logger":69,"../utils/json":72,"../utils/log":74,"./doc":21,"./page-config":23}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7115,7 +6903,7 @@ var PageConfig = /*#__PURE__*/function () {
 
 exports.PageConfig = PageConfig;
 
-},{"../utils/error-logger":73}],25:[function(require,module,exports){
+},{"../utils/error-logger":69}],24:[function(require,module,exports){
 "use strict";
 
 var _arrayIncludes = require("./polyfills/array-includes");
@@ -7160,7 +6948,7 @@ var _promise = require("./polyfills/promise");
 (0, _documentContains.install)(self);
 (0, _arrayIncludes.install)(self);
 
-},{"./polyfills/array-includes":26,"./polyfills/document-contains":27,"./polyfills/domtokenlist-toggle":28,"./polyfills/math-sign":29,"./polyfills/object-assign":30,"./polyfills/object-values":31,"./polyfills/promise":32}],26:[function(require,module,exports){
+},{"./polyfills/array-includes":25,"./polyfills/document-contains":26,"./polyfills/domtokenlist-toggle":27,"./polyfills/math-sign":28,"./polyfills/object-assign":29,"./polyfills/object-values":30,"./polyfills/promise":31}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7227,7 +7015,7 @@ function install(win) {
   }
 }
 
-},{}],27:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7283,7 +7071,7 @@ function install(win) {
   }
 }
 
-},{}],28:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7355,7 +7143,7 @@ function isIe(win) {
   return /Trident|MSIE|IEMobile/i.test(win.navigator.userAgent);
 }
 
-},{}],29:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7414,7 +7202,7 @@ function install(win) {
   }
 }
 
-},{}],30:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7486,7 +7274,7 @@ function install(win) {
   }
 }
 
-},{}],31:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7551,7 +7339,7 @@ function install(win) {
   }
 }
 
-},{}],32:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 "use strict";
 
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
@@ -7607,7 +7395,7 @@ function install(win) {
   }
 }
 
-},{"promise-pjs/promise":3}],33:[function(require,module,exports){
+},{"promise-pjs/promise":3}],32:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -7615,7 +7403,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.deserialize = deserialize;
 exports.getLabel = getLabel;
-exports.ViewSubscriptionsResponse = exports.Timestamp = exports.SubscribeResponse = exports.SmartBoxMessage = exports.SkuSelectedResponse = exports.Message = exports.LinkingInfoResponse = exports.LinkSaveTokenRequest = exports.FinishedLoggingResponse = exports.EventParams = exports.EventOriginator = exports.EntitlementsResponse = exports.EntitlementsRequest = exports.EntitlementJwt = exports.AnalyticsRequest = exports.AnalyticsEventMeta = exports.AnalyticsEvent = exports.AnalyticsContext = exports.AlreadySubscribedResponse = exports.AccountCreationRequest = void 0;
+exports.ViewSubscriptionsResponse = exports.Timestamp = exports.SubscribeResponse = exports.SmartBoxMessage = exports.SkuSelectedResponse = exports.Message = exports.LinkingInfoResponse = exports.LinkSaveTokenRequest = exports.FinishedLoggingResponse = exports.EventParams = exports.EventOriginator = exports.EntitlementsResponse = exports.EntitlementsPingbackRequest = exports.AnalyticsRequest = exports.AnalyticsEventMeta = exports.AnalyticsEvent = exports.AnalyticsContext = exports.AlreadySubscribedResponse = exports.AccountCreationRequest = void 0;
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -7718,7 +7506,6 @@ var AnalyticsEvent = {
   ACTION_USER_CONSENT_DEFERRED_ACCOUNT: 1021,
   ACTION_USER_DENY_DEFERRED_ACCOUNT: 1022,
   ACTION_DEFERRED_ACCOUNT_REDIRECT: 1023,
-  ACTION_GET_ENTITLEMENTS: 1024,
   EVENT_PAYMENT_FAILED: 2000,
   EVENT_CUSTOM: 3000,
   EVENT_CONFIRM_TX_ID: 3001,
@@ -7727,10 +7514,6 @@ var AnalyticsEvent = {
   EVENT_GPAY_CANNOT_CONFIRM_TX_ID: 3004,
   EVENT_GOOGLE_UPDATED: 3005,
   EVENT_NEW_TX_ID: 3006,
-  EVENT_UNLOCKED_BY_SUBSCRIPTION: 3007,
-  EVENT_UNLOCKED_BY_METER: 3008,
-  EVENT_NO_ENTITLEMENTS: 3009,
-  EVENT_HAS_METERING_ENTITLEMENTS: 3010,
   EVENT_SUBSCRIPTION_STATE: 4000
 };
 /** @enum {number} */
@@ -8455,140 +8238,67 @@ var AnalyticsRequest = /*#__PURE__*/function () {
 
 exports.AnalyticsRequest = AnalyticsRequest;
 
-var EntitlementJwt = /*#__PURE__*/function () {
+var EntitlementsPingbackRequest = /*#__PURE__*/function () {
   /**
    * @param {!Array<*>=} data
    * @param {boolean=} includesLabel
    */
-  function EntitlementJwt() {
+  function EntitlementsPingbackRequest() {
     var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
     var includesLabel = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
 
-    _classCallCheck(this, EntitlementJwt);
+    _classCallCheck(this, EntitlementsPingbackRequest);
 
     var base = includesLabel ? 1 : 0;
     /** @private {?string} */
 
-    this.jwt_ = data[base] == null ? null : data[base];
+    this.hashedCanonicalUrl_ = data[base] == null ? null : data[base];
     /** @private {?string} */
 
-    this.source_ = data[1 + base] == null ? null : data[1 + base];
+    this.publisherUserId_ = data[1 + base] == null ? null : data[1 + base];
+    /** @private {?Timestamp} */
+
+    this.clientEventTime_ = data[2 + base] == null || data[2 + base] == undefined ? null : new Timestamp(data[2 + base], includesLabel);
+    /** @private {?string} */
+
+    this.signedMeter_ = data[3 + base] == null ? null : data[3 + base];
   }
   /**
    * @return {?string}
    */
 
 
-  _createClass(EntitlementJwt, [{
-    key: "getJwt",
-    value: function getJwt() {
-      return this.jwt_;
+  _createClass(EntitlementsPingbackRequest, [{
+    key: "getHashedCanonicalUrl",
+    value: function getHashedCanonicalUrl() {
+      return this.hashedCanonicalUrl_;
     }
     /**
      * @param {string} value
      */
 
   }, {
-    key: "setJwt",
-    value: function setJwt(value) {
-      this.jwt_ = value;
+    key: "setHashedCanonicalUrl",
+    value: function setHashedCanonicalUrl(value) {
+      this.hashedCanonicalUrl_ = value;
     }
     /**
      * @return {?string}
      */
 
   }, {
-    key: "getSource",
-    value: function getSource() {
-      return this.source_;
+    key: "getPublisherUserId",
+    value: function getPublisherUserId() {
+      return this.publisherUserId_;
     }
     /**
      * @param {string} value
      */
 
   }, {
-    key: "setSource",
-    value: function setSource(value) {
-      this.source_ = value;
-    }
-    /**
-     * @param {boolean} includeLabel
-     * @return {!Array<?>}
-     * @override
-     */
-
-  }, {
-    key: "toArray",
-    value: function toArray() {
-      var includeLabel = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
-      var arr = [this.jwt_, // field 1 - jwt
-      this.source_ // field 2 - source
-      ];
-
-      if (includeLabel) {
-        arr.unshift(this.label());
-      }
-
-      return arr;
-    }
-    /**
-     * @return {string}
-     * @override
-     */
-
-  }, {
-    key: "label",
-    value: function label() {
-      return 'EntitlementJwt';
-    }
-  }]);
-
-  return EntitlementJwt;
-}();
-/**
- * @implements {Message}
- */
-
-
-exports.EntitlementJwt = EntitlementJwt;
-
-var EntitlementsRequest = /*#__PURE__*/function () {
-  /**
-   * @param {!Array<*>=} data
-   * @param {boolean=} includesLabel
-   */
-  function EntitlementsRequest() {
-    var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
-    var includesLabel = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
-
-    _classCallCheck(this, EntitlementsRequest);
-
-    var base = includesLabel ? 1 : 0;
-    /** @private {?EntitlementJwt} */
-
-    this.usedEntitlement_ = data[base] == null || data[base] == undefined ? null : new EntitlementJwt(data[base], includesLabel);
-    /** @private {?Timestamp} */
-
-    this.clientEventTime_ = data[1 + base] == null || data[1 + base] == undefined ? null : new Timestamp(data[1 + base], includesLabel);
-  }
-  /**
-   * @return {?EntitlementJwt}
-   */
-
-
-  _createClass(EntitlementsRequest, [{
-    key: "getUsedEntitlement",
-    value: function getUsedEntitlement() {
-      return this.usedEntitlement_;
-    }
-    /**
-     * @param {!EntitlementJwt} value
-     */
-
-  }, {
-    key: "setUsedEntitlement",
-    value: function setUsedEntitlement(value) {
-      this.usedEntitlement_ = value;
+    key: "setPublisherUserId",
+    value: function setPublisherUserId(value) {
+      this.publisherUserId_ = value;
     }
     /**
      * @return {?Timestamp}
@@ -8609,6 +8319,24 @@ var EntitlementsRequest = /*#__PURE__*/function () {
       this.clientEventTime_ = value;
     }
     /**
+     * @return {?string}
+     */
+
+  }, {
+    key: "getSignedMeter",
+    value: function getSignedMeter() {
+      return this.signedMeter_;
+    }
+    /**
+     * @param {string} value
+     */
+
+  }, {
+    key: "setSignedMeter",
+    value: function setSignedMeter(value) {
+      this.signedMeter_ = value;
+    }
+    /**
      * @param {boolean} includeLabel
      * @return {!Array<?>}
      * @override
@@ -8618,8 +8346,10 @@ var EntitlementsRequest = /*#__PURE__*/function () {
     key: "toArray",
     value: function toArray() {
       var includeLabel = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
-      var arr = [this.usedEntitlement_ ? this.usedEntitlement_.toArray(includeLabel) : [], // field 1 - used_entitlement
-      this.clientEventTime_ ? this.clientEventTime_.toArray(includeLabel) : [] // field 2 - client_event_time
+      var arr = [this.hashedCanonicalUrl_, // field 1 - hashed_canonical_url
+      this.publisherUserId_, // field 2 - publisher_user_id
+      this.clientEventTime_ ? this.clientEventTime_.toArray(includeLabel) : [], // field 3 - client_event_time
+      this.signedMeter_ // field 4 - signed_meter
       ];
 
       if (includeLabel) {
@@ -8636,18 +8366,18 @@ var EntitlementsRequest = /*#__PURE__*/function () {
   }, {
     key: "label",
     value: function label() {
-      return 'EntitlementsRequest';
+      return 'EntitlementsPingbackRequest';
     }
   }]);
 
-  return EntitlementsRequest;
+  return EntitlementsPingbackRequest;
 }();
 /**
  * @implements {Message}
  */
 
 
-exports.EntitlementsRequest = EntitlementsRequest;
+exports.EntitlementsPingbackRequest = EntitlementsPingbackRequest;
 
 var EntitlementsResponse = /*#__PURE__*/function () {
   /**
@@ -9642,8 +9372,7 @@ var PROTO_MAP = {
   'AnalyticsContext': AnalyticsContext,
   'AnalyticsEventMeta': AnalyticsEventMeta,
   'AnalyticsRequest': AnalyticsRequest,
-  'EntitlementJwt': EntitlementJwt,
-  'EntitlementsRequest': EntitlementsRequest,
+  'EntitlementsPingbackRequest': EntitlementsPingbackRequest,
   'EntitlementsResponse': EntitlementsResponse,
   'EventParams': EventParams,
   'FinishedLoggingResponse': FinishedLoggingResponse,
@@ -9689,7 +9418,7 @@ function getLabel(messageType) {
   return message.label();
 }
 
-},{}],34:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -9707,13 +9436,13 @@ var _dom = require("../utils/dom");
 
 var _services = require("./services");
 
-var _url = require("../utils/url");
-
 var _experiments = require("./experiments");
 
 var _string = require("../utils/string");
 
 var _log = require("../utils/log");
+
+var _url = require("../utils/url");
 
 var _style = require("../utils/style");
 
@@ -9939,8 +9668,7 @@ var AnalyticsService = /*#__PURE__*/function () {
       }
 
       context.setReferringOrigin((0, _url.parseUrl)(this.getReferrer_()).origin);
-      context.setClientVersion('SwG 0.1.22-1602710098364');
-      context.setUrl((0, _url.getCanonicalUrl)(this.doc_));
+      context.setClientVersion('SwG 0.1.22-1603842716914');
       var utmParams = (0, _url.parseQueryString)(this.getQueryString_());
       var campaign = utmParams['utm_campaign'];
       var medium = utmParams['utm_medium'];
@@ -9956,6 +9684,12 @@ var AnalyticsService = /*#__PURE__*/function () {
 
       if (source) {
         context.setUtmSource(source);
+      }
+
+      var urlNode = this.doc_.getRootNode().querySelector("link[rel='canonical']");
+
+      if (urlNode && urlNode.href) {
+        context.setUrl(urlNode.href);
       }
     }
     /**
@@ -10190,7 +9924,7 @@ var AnalyticsService = /*#__PURE__*/function () {
 
 exports.AnalyticsService = AnalyticsService;
 
-},{"../proto/api_messages":33,"../utils/dom":72,"../utils/log":78,"../utils/string":82,"../utils/style":83,"../utils/url":85,"./client-event-manager":37,"./experiment-flags":43,"./experiments":44,"./services":60}],35:[function(require,module,exports){
+},{"../proto/api_messages":32,"../utils/dom":68,"../utils/log":74,"../utils/string":78,"../utils/style":79,"../utils/url":81,"./client-event-manager":36,"./experiment-flags":42,"./experiments":43,"./services":57}],34:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10442,7 +10176,7 @@ var ButtonApi = /*#__PURE__*/function () {
 
 exports.ButtonApi = ButtonApi;
 
-},{"../proto/api_messages":33,"../utils/dom":72,"../utils/i18n":75,"./smart-button-api":61}],36:[function(require,module,exports){
+},{"../proto/api_messages":32,"../utils/dom":68,"../utils/i18n":71,"./smart-button-api":58}],35:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10801,7 +10535,7 @@ var Callbacks = /*#__PURE__*/function () {
 
 exports.Callbacks = Callbacks;
 
-},{"../utils/errors":74,"../utils/log":78}],37:[function(require,module,exports){
+},{"../utils/errors":70,"../utils/log":74}],36:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10987,7 +10721,7 @@ var ClientEventManager = /*#__PURE__*/function () {
 
 exports.ClientEventManager = ClientEventManager;
 
-},{"../api/client-event-manager-api":5,"../proto/api_messages":33,"../utils/log":78,"../utils/types":84}],38:[function(require,module,exports){
+},{"../api/client-event-manager-api":5,"../proto/api_messages":32,"../utils/log":74,"../utils/types":80}],37:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11114,7 +10848,7 @@ var ContributionsFlow = /*#__PURE__*/function () {
 
 exports.ContributionsFlow = ContributionsFlow;
 
-},{"../api/subscriptions":13,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"./pay-flow":56,"./services":60}],39:[function(require,module,exports){
+},{"../api/subscriptions":12,"../proto/api_messages":32,"../ui/activity-iframe-view":61,"./pay-flow":53,"./services":57}],38:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11277,7 +11011,7 @@ var DeferredAccountFlow = /*#__PURE__*/function () {
 
 exports.DeferredAccountFlow = DeferredAccountFlow;
 
-},{"../api/deferred-account-creation":6,"../api/subscribe-response":12,"../api/subscriptions":13,"../api/user-data":14,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"../utils/errors":74,"../utils/jwt":77,"./pay-flow":56,"./services":60}],40:[function(require,module,exports){
+},{"../api/deferred-account-creation":6,"../api/subscribe-response":11,"../api/subscriptions":12,"../api/user-data":13,"../proto/api_messages":32,"../ui/activity-iframe-view":61,"../utils/errors":70,"../utils/jwt":73,"./pay-flow":53,"./services":57}],39:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11411,7 +11145,7 @@ var DepsDef = /*#__PURE__*/function () {
 
 exports.DepsDef = DepsDef;
 
-},{}],41:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11419,31 +11153,15 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.EntitlementsManager = void 0;
 
-var _api_messages = require("../proto/api_messages");
-
 var _entitlements = require("../api/entitlements");
 
-var _subscriptions = require("../api/subscriptions");
-
 var _jwt = require("../utils/jwt");
-
-var _metering = require("../api/metering");
-
-var _meterToastApi = require("./meter-toast-api");
 
 var _toast = require("../ui/toast");
 
 var _services = require("../runtime/services");
 
-var _url = require("../utils/url");
-
-var _string = require("../utils/string");
-
 var _services2 = require("./services");
-
-var _dateUtils = require("../utils/date-utils");
-
-var _log = require("../utils/log");
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -11535,36 +11253,27 @@ var EntitlementsManager = /*#__PURE__*/function () {
       this.storage_.remove(IS_READY_TO_PAY_STORAGE_KEY);
     }
     /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @return {string}
+     * @private
+     */
+
+  }, {
+    key: "getQueryString_",
+    value: function getQueryString_() {
+      return this.win_.location.search;
+    }
+    /**
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      */
 
   }, {
     key: "getEntitlements",
-    value: function getEntitlements(params) {
+    value: function getEntitlements(encryptedDocumentKey) {
       var _this = this;
 
-      // Remain backwards compatible by accepting
-      // `encryptedDocumentKey` string as a first param.
-      if (typeof params === 'string') {
-        // TODO: Delete the fallback if nobody needs it. Use a log to verify.
-        if (Date.now() > 1600289016959) {
-          // TODO: Remove the conditional check for this warning
-          // after the AMP extension is updated to pass an object.
-          (0, _log.warn)("[swg.js:getEntitlements]: If present, the first param of getEntitlements() should be an object of type GetEntitlementsParamsExternalDef.");
-        }
-
-        params = {
-          encryption: {
-            encryptedDocumentKey:
-            /**@type {string} */
-            params
-          }
-        };
-      }
-
       if (!this.responsePromise_) {
-        this.responsePromise_ = this.getEntitlementsFlow_(params);
+        this.responsePromise_ = this.getEntitlementsFlow_(encryptedDocumentKey);
       }
 
       return this.responsePromise_.then(function (response) {
@@ -11596,64 +11305,38 @@ var EntitlementsManager = /*#__PURE__*/function () {
       return false;
     }
     /**
-     * Sends a pingback that marks a metering entitlement as used.
-     * @param {!Entitlements} entitlements
-     */
-
-  }, {
-    key: "sendPingback_",
-    value: function sendPingback_(entitlements) {
-      var entitlement = entitlements.getEntitlementForThis();
-
-      if (!entitlement || entitlement.source !== _entitlements.GOOGLE_METERING_SOURCE) {
-        return;
-      }
-
-      this.deps_.eventManager().logSwgEvent(_api_messages.AnalyticsEvent.EVENT_UNLOCKED_BY_METER, false);
-      var jwt = new _api_messages.EntitlementJwt();
-      jwt.setSource(entitlement.source);
-      jwt.setJwt(entitlement.subscriptionToken);
-      var message = new _api_messages.EntitlementsRequest();
-      message.setUsedEntitlement(jwt);
-      message.setClientEventTime((0, _dateUtils.toTimestamp)(Date.now()));
-      var url = '/publication/' + encodeURIComponent(this.publicationId_) + '/entitlements';
-      this.fetcher_.sendPost((0, _services2.serviceUrl)(url), message);
-    }
-    /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      * @private
      */
 
   }, {
     key: "getEntitlementsFlow_",
-    value: function getEntitlementsFlow_(params) {
+    value: function getEntitlementsFlow_(encryptedDocumentKey) {
       var _this2 = this;
 
-      return this.fetchEntitlementsWithCaching_(params).then(function (entitlements) {
+      return this.fetchEntitlementsWithCaching_(encryptedDocumentKey).then(function (entitlements) {
         _this2.onEntitlementsFetched_(entitlements);
 
         return entitlements;
       });
     }
     /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      * @private
      */
 
   }, {
     key: "fetchEntitlementsWithCaching_",
-    value: function fetchEntitlementsWithCaching_(params) {
+    value: function fetchEntitlementsWithCaching_(encryptedDocumentKey) {
       var _this3 = this;
 
       return Promise.all([this.storage_.get(ENTS_STORAGE_KEY), this.storage_.get(IS_READY_TO_PAY_STORAGE_KEY)]).then(function (cachedValues) {
         var raw = cachedValues[0];
         var irtp = cachedValues[1]; // Try cache first.
 
-        var needsDecryption = !!(params && params.encryption);
-
-        if (raw && !needsDecryption) {
+        if (raw && !encryptedDocumentKey) {
           var cached = _this3.getValidJwtEntitlements_(raw,
           /* requireNonExpired */
           true, irtpStringToBoolean(irtp));
@@ -11666,9 +11349,9 @@ var EntitlementsManager = /*#__PURE__*/function () {
         } // If cache didn't match, perform fetch.
 
 
-        return _this3.fetchEntitlements_(params).then(function (ents) {
-          // If the product is enabled by cacheable entitlements, store them in cache.
-          if (ents && ents.enablesThisWithCacheableEntitlements() && ents.raw) {
+        return _this3.fetchEntitlements_(encryptedDocumentKey).then(function (ents) {
+          // If entitlements match the product, store them in cache.
+          if (ents && ents.enablesThis() && ents.raw) {
             _this3.storage_.set(ENTS_STORAGE_KEY, ents.raw);
           }
 
@@ -11677,14 +11360,14 @@ var EntitlementsManager = /*#__PURE__*/function () {
       });
     }
     /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      * @private
      */
 
   }, {
     key: "fetchEntitlements_",
-    value: function fetchEntitlements_(params) {
+    value: function fetchEntitlements_(encryptedDocumentKey) {
       var _this4 = this;
 
       // TODO(dvoytenko): Replace retries with consistent fetch.
@@ -11693,7 +11376,7 @@ var EntitlementsManager = /*#__PURE__*/function () {
 
       var attempt = function attempt() {
         positiveRetries--;
-        return _this4.fetch_(params).then(function (entitlements) {
+        return _this4.fetch_(encryptedDocumentKey).then(function (entitlements) {
           if (entitlements.enablesThis() || positiveRetries <= 0) {
             return entitlements;
           }
@@ -11820,7 +11503,7 @@ var EntitlementsManager = /*#__PURE__*/function () {
   }, {
     key: "createEntitlements_",
     value: function createEntitlements_(raw, json, isReadyToPay, decryptedDocumentKey) {
-      return new _entitlements.Entitlements(SERVICE_ID, raw, _entitlements.Entitlement.parseListFromJson(json), this.pageConfig_.getProductId(), this.ack_.bind(this), this.consume_.bind(this), isReadyToPay, decryptedDocumentKey);
+      return new _entitlements.Entitlements(SERVICE_ID, raw, _entitlements.Entitlement.parseListFromJson(json), this.pageConfig_.getProductId(), this.ack_.bind(this), isReadyToPay, decryptedDocumentKey);
     }
     /**
      * @param {!Entitlements} entitlements
@@ -11840,49 +11523,53 @@ var EntitlementsManager = /*#__PURE__*/function () {
       } // Notify on the received entitlements.
 
 
-      this.deps_.callbacks().triggerEntitlementsResponse(Promise.resolve(entitlements));
-      var entitlement = entitlements.getEntitlementForThis();
+      this.deps_.callbacks().triggerEntitlementsResponse(Promise.resolve(entitlements)); // Show a toast if needed.
 
-      if (!entitlement) {
-        this.deps_.eventManager().logSwgEvent(_api_messages.AnalyticsEvent.EVENT_NO_ENTITLEMENTS, false);
-        return;
-      }
-
-      this.maybeShowToast_(entitlement);
+      this.maybeShowToast_(entitlements);
     }
     /**
-     * @param {!Entitlement} entitlement
+     * @param {!Entitlements} entitlements
      * @return {!Promise}
      * @private
      */
 
   }, {
     key: "maybeShowToast_",
-    value: function maybeShowToast_(entitlement) {
+    value: function maybeShowToast_(entitlements) {
       var _this5 = this;
 
-      // Don't show toast for metering entitlements.
-      if (entitlement.source === _entitlements.GOOGLE_METERING_SOURCE) {
-        this.deps_.eventManager().logSwgEvent(_api_messages.AnalyticsEvent.EVENT_HAS_METERING_ENTITLEMENTS, false);
-        return Promise.resolve();
-      }
+      var entitlement = entitlements.getEntitlementForThis();
 
-      this.deps_.eventManager().logSwgEvent(_api_messages.AnalyticsEvent.EVENT_UNLOCKED_BY_SUBSCRIPTION, false); // Check if storage bit is set. It's only set by the `Entitlements.ack` method.
+      if (!entitlement) {
+        return Promise.resolve();
+      } // Check if storage bit is set. It's only set by the `Entitlements.ack`
+      // method.
+
 
       return this.storage_.get(TOAST_STORAGE_KEY).then(function (value) {
-        var toastWasShown = value === '1';
-
-        if (toastWasShown) {
+        if (value == '1') {
+          // Already shown;
           return;
-        } // Show toast.
+        }
 
-
-        var source = entitlement.source || 'google';
-        return new _toast.Toast(_this5.deps_, (0, _services.feUrl)('/toastiframe'), (0, _services.feArgs)({
-          'publicationId': _this5.publicationId_,
-          'source': source
-        })).open();
+        if (entitlement) {
+          _this5.showToast_(entitlement);
+        }
       });
+    }
+    /**
+     * @param {!Entitlement} entitlement
+     * @private
+     */
+
+  }, {
+    key: "showToast_",
+    value: function showToast_(entitlement) {
+      var source = entitlement.source || 'google';
+      return new _toast.Toast(this.deps_, (0, _services.feUrl)('/toastiframe'), (0, _services.feArgs)({
+        'publicationId': this.publicationId_,
+        'source': source
+      })).open();
     }
     /**
      * @param {!Entitlements} entitlements
@@ -11897,112 +11584,24 @@ var EntitlementsManager = /*#__PURE__*/function () {
       }
     }
     /**
-     * @param {!Entitlements} entitlements
-     * @param {?Function=} onCloseDialog Called after the user closes the dialog.
-     * @private
-     */
-
-  }, {
-    key: "consume_",
-    value: function consume_(entitlements, onCloseDialog) {
-      var _this6 = this;
-
-      if (entitlements.enablesThisWithGoogleMetering()) {
-        var meterToastApi = new _meterToastApi.MeterToastApi(this.deps_);
-        meterToastApi.setOnCancelCallback(function () {
-          if (onCloseDialog) {
-            onCloseDialog();
-          }
-
-          _this6.sendPingback_(entitlements);
-        });
-        return meterToastApi.start();
-      }
-    }
-    /**
-     * @param {!GetEntitlementsParamsExternalDef=} params
+     * @param {?string=} encryptedDocumentKey
      * @return {!Promise<!Entitlements>}
      * @private
      */
 
   }, {
     key: "fetch_",
-    value: function fetch_(params) {
-      var _this7 = this;
+    value: function fetch_(encryptedDocumentKey) {
+      var _this6 = this;
 
-      return (0, _string.hash)((0, _url.getCanonicalUrl)(this.deps_.doc())).then(function (hashedCanonicalUrl) {
-        var urlParams = []; // Add encryption param.
+      var url = '/publication/' + encodeURIComponent(this.publicationId_) + '/entitlements';
 
-        if (params && params.encryption) {
-          urlParams.push('crypt=' + encodeURIComponent(params.encryption.encryptedDocumentKey));
-        } // Add metering params.
+      if (encryptedDocumentKey) {
+        url += '?crypt=' + encodeURIComponent(encryptedDocumentKey);
+      }
 
-
-        var productId = _this7.pageConfig_.getProductId();
-
-        if (productId && params && params.metering && params.metering.state) {
-          /** @type {!GetEntitlementsParamsInternalDef} */
-          var encodableParams = {
-            metering: {
-              clientTypes: [_metering.MeterClientTypes.LICENSED_BY_GOOGLE],
-              owner: productId,
-              resource: {
-                hashedCanonicalUrl: hashedCanonicalUrl
-              },
-              state: {
-                id: params.metering.state.id,
-                attributes: []
-              }
-            }
-          }; // Add attributes.
-
-          var standardAttributes = params.metering.state.standardAttributes;
-
-          if (standardAttributes) {
-            Object.keys(standardAttributes).forEach(function (key) {
-              encodableParams.metering.state.attributes.push({
-                name: 'standard_' + key,
-                timestamp: standardAttributes[key].timestamp
-              });
-            });
-          }
-
-          var customAttributes = params.metering.state.customAttributes;
-
-          if (customAttributes) {
-            Object.keys(customAttributes).forEach(function (key) {
-              encodableParams.metering.state.attributes.push({
-                name: 'custom_' + key,
-                timestamp: customAttributes[key].timestamp
-              });
-            });
-          } // Encode params.
-
-
-          var encodedParams = btoa(JSON.stringify(encodableParams));
-          urlParams.push('encodedParams=' + encodedParams);
-        } // Build URL.
-
-
-        var url = '/publication/' + encodeURIComponent(_this7.publicationId_) + '/entitlements';
-
-        if (urlParams.length > 0) {
-          url += '?' + urlParams.join('&');
-        }
-
-        return (0, _services2.serviceUrl)(url);
-      }).then(function (url) {
-        _this7.deps_.eventManager().logSwgEvent(_api_messages.AnalyticsEvent.ACTION_GET_ENTITLEMENTS, false);
-
-        return _this7.fetcher_.fetchCredentialedJson(url);
-      }).then(function (json) {
-        if (json.errorMessages && json.errorMessages.length > 0) {
-          json.errorMessages.forEach(function (errorMessage) {
-            (0, _log.warn)('SwG Entitlements: ' + errorMessage);
-          });
-        }
-
-        return _this7.parseEntitlements(json);
+      return this.fetcher_.fetchCredentialedJson((0, _services2.serviceUrl)(url)).then(function (json) {
+        return _this6.parseEntitlements(json);
       });
     }
   }]);
@@ -12033,7 +11632,7 @@ function irtpStringToBoolean(value) {
   }
 }
 
-},{"../api/entitlements":7,"../api/metering":9,"../api/subscriptions":13,"../proto/api_messages":33,"../runtime/services":60,"../ui/toast":66,"../utils/date-utils":70,"../utils/jwt":77,"../utils/log":78,"../utils/string":82,"../utils/url":85,"./meter-toast-api":52,"./services":60}],42:[function(require,module,exports){
+},{"../api/entitlements":7,"../runtime/services":57,"../ui/toast":63,"../utils/jwt":73,"./services":57}],41:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12075,7 +11674,7 @@ function analyticsEventToPublisherEvent(analyticsEvent) {
   return AnalyticsEventToPublisherEvent[analyticsEvent];
 }
 
-},{"../api/logger-api":8,"../proto/api_messages":33}],43:[function(require,module,exports){
+},{"../api/logger-api":8,"../proto/api_messages":32}],42:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12150,7 +11749,7 @@ var ExperimentFlags = {
 };
 exports.ExperimentFlags = ExperimentFlags;
 
-},{}],44:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12412,7 +12011,7 @@ function getOnExperiments(win) {
   return experiments;
 }
 
-},{"../utils/errors":74,"../utils/url":85}],45:[function(require,module,exports){
+},{"../utils/errors":70,"../utils/url":81}],44:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12562,7 +12161,7 @@ var XhrFetcher = /*#__PURE__*/function () {
 
 exports.XhrFetcher = XhrFetcher;
 
-},{"../utils/url":85,"../utils/xhr":86}],46:[function(require,module,exports){
+},{"../utils/url":81,"../utils/xhr":82}],45:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12698,7 +12297,7 @@ function duplicateErrorIfNecessary(error) {
   return e;
 }
 
-},{}],47:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13126,7 +12725,7 @@ var LinkSaveFlow = /*#__PURE__*/function () {
 
 exports.LinkSaveFlow = LinkSaveFlow;
 
-},{"../api/subscriptions":13,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"../utils/activity-utils":67,"../utils/errors":74,"./services":60}],48:[function(require,module,exports){
+},{"../api/subscriptions":12,"../proto/api_messages":32,"../ui/activity-iframe-view":61,"../utils/activity-utils":64,"../utils/errors":70,"./services":57}],47:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13240,7 +12839,7 @@ var Logger = /*#__PURE__*/function () {
 
 exports.Logger = Logger;
 
-},{"../api/logger-api":8,"../proto/api_messages":33,"../utils/types":84,"./event-type-mapping":42}],49:[function(require,module,exports){
+},{"../api/logger-api":8,"../proto/api_messages":32,"../utils/types":80,"./event-type-mapping":41}],48:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13321,7 +12920,7 @@ var LoginNotificationApi = /*#__PURE__*/function () {
 
 exports.LoginNotificationApi = LoginNotificationApi;
 
-},{"../api/subscriptions":13,"../ui/activity-iframe-view":64,"./services":60}],50:[function(require,module,exports){
+},{"../api/subscriptions":12,"../ui/activity-iframe-view":61,"./services":57}],49:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13408,168 +13007,7 @@ var LoginPromptApi = /*#__PURE__*/function () {
 
 exports.LoginPromptApi = LoginPromptApi;
 
-},{"../api/subscriptions":13,"../ui/activity-iframe-view":64,"../utils/errors":74,"./services":60}],51:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.MeterRegwallApi = void 0;
-
-var _activityIframeView = require("../ui/activity-iframe-view");
-
-var _subscriptions = require("../api/subscriptions");
-
-var _services = require("./services");
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
-
-function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
-
-var MeterRegwallApi = /*#__PURE__*/function () {
-  /**
-   * @param {!./deps.DepsDef} deps
-   * @param {{ gsiUrl: string, alreadyRegisteredUrl: string}} params
-   */
-  function MeterRegwallApi(deps, params) {
-    _classCallCheck(this, MeterRegwallApi);
-
-    /** @private @const {!./deps.DepsDef} */
-    this.deps_ = deps;
-    /** @private @const {!Window} */
-
-    this.win_ = deps.win();
-    /** @private @const {!../components/activities.ActivityPorts} */
-
-    this.activityPorts_ = deps.activities();
-    /** @private @const {!../components/dialog-manager.DialogManager} */
-
-    this.dialogManager_ = deps.dialogManager();
-    /** @private @const {!ActivityIframeView} */
-
-    this.activityIframeView_ = new _activityIframeView.ActivityIframeView(this.win_, this.activityPorts_, (0, _services.feUrl)('/meterregwalliframe'), (0, _services.feArgs)({
-      publicationId: deps.pageConfig().getPublicationId(),
-      productId: deps.pageConfig().getProductId(),
-      gsiUrl: params.gsiUrl,
-      alreadyRegisteredUrl: params.alreadyRegisteredUrl
-    }),
-    /* shouldFadeBody */
-    true);
-  }
-  /**
-   * Prompts the user to register to the meter.
-   * @return {!Promise}
-   */
-
-
-  _createClass(MeterRegwallApi, [{
-    key: "start",
-    value: function start() {
-      this.deps_.callbacks().triggerFlowStarted(_subscriptions.SubscriptionFlows.SHOW_METER_REGWALL);
-      return this.dialogManager_.openView(this.activityIframeView_);
-    }
-  }]);
-
-  return MeterRegwallApi;
-}();
-
-exports.MeterRegwallApi = MeterRegwallApi;
-
-},{"../api/subscriptions":13,"../ui/activity-iframe-view":64,"./services":60}],52:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.MeterToastApi = void 0;
-
-var _activityIframeView = require("../ui/activity-iframe-view");
-
-var _subscriptions = require("../api/subscriptions");
-
-var _api_messages = require("../proto/api_messages");
-
-var _services = require("./services");
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
-
-function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
-
-var MeterToastApi = /*#__PURE__*/function () {
-  /**
-   * @param {!./deps.DepsDef} deps
-   */
-  function MeterToastApi(deps) {
-    _classCallCheck(this, MeterToastApi);
-
-    /** @private @const {!./deps.DepsDef} */
-    this.deps_ = deps;
-    /** @private @const {!Window} */
-
-    this.win_ = deps.win();
-    /** @private @const {!../components/activities.ActivityPorts} */
-
-    this.activityPorts_ = deps.activities();
-    /** @private @const {!../components/dialog-manager.DialogManager} */
-
-    this.dialogManager_ = deps.dialogManager();
-    /** @private @const {!ActivityIframeView} */
-
-    this.activityIframeView_ = new _activityIframeView.ActivityIframeView(this.win_, this.activityPorts_, (0, _services.feUrl)('/metertoastiframe'), (0, _services.feArgs)({
-      publicationId: deps.pageConfig().getPublicationId(),
-      productId: deps.pageConfig().getProductId(),
-      hasSubscriptionCallback: deps.callbacks().hasSubscribeRequestCallback()
-    }),
-    /* shouldFadeBody */
-    false);
-  }
-  /**
-   * Shows the user the metering toast.
-   * @return {!Promise}
-   */
-
-
-  _createClass(MeterToastApi, [{
-    key: "start",
-    value: function start() {
-      this.deps_.callbacks().triggerFlowStarted(_subscriptions.SubscriptionFlows.SHOW_METER_TOAST);
-      this.activityIframeView_.on(_api_messages.ViewSubscriptionsResponse, this.startNativeFlow_.bind(this));
-      return this.dialogManager_.openView(this.activityIframeView_);
-    }
-    /**
-     * Sets a callback function to happen onCancel.
-     * @param {function()} onCancelCallback
-     */
-
-  }, {
-    key: "setOnCancelCallback",
-    value: function setOnCancelCallback(onCancelCallback) {
-      this.activityIframeView_.onCancel(onCancelCallback);
-    }
-    /**
-     * @param {ViewSubscriptionsResponse} response
-     * @private
-     */
-
-  }, {
-    key: "startNativeFlow_",
-    value: function startNativeFlow_(response) {
-      if (response.getNative()) {
-        this.deps_.callbacks().triggerSubscribeRequest();
-      }
-    }
-  }]);
-
-  return MeterToastApi;
-}();
-
-exports.MeterToastApi = MeterToastApi;
-
-},{"../api/subscriptions":13,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"./services":60}],53:[function(require,module,exports){
+},{"../api/subscriptions":12,"../ui/activity-iframe-view":61,"../utils/errors":70,"./services":57}],50:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13638,7 +13076,7 @@ var OffersApi = /*#__PURE__*/function () {
 
 exports.OffersApi = OffersApi;
 
-},{"./services":60}],54:[function(require,module,exports){
+},{"./services":57}],51:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -14063,13 +13501,15 @@ var AbbrvOfferFlow = /*#__PURE__*/function () {
 
 exports.AbbrvOfferFlow = AbbrvOfferFlow;
 
-},{"../api/subscriptions":13,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"../utils/log":78,"./pay-flow":56,"./services":60}],55:[function(require,module,exports){
+},{"../api/subscriptions":12,"../proto/api_messages":32,"../ui/activity-iframe-view":61,"../utils/log":74,"./pay-flow":53,"./services":57}],52:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.RedirectVerifierHelper = exports.PayClient = exports.PAY_ORIGIN = exports.PayOptionsDef = void 0;
+
+var _experimentFlags = require("./experiment-flags");
 
 var _payjs_async = require("../../third_party/gpay/src/payjs_async");
 
@@ -14080,6 +13520,8 @@ var _bytes = require("../utils/bytes");
 var _errors = require("../utils/errors");
 
 var _services = require("./services");
+
+var _experiments = require("./experiments");
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
@@ -14150,9 +13592,21 @@ var PayClient = /*#__PURE__*/function () {
     /** @private {?PaymentsAsyncClient} */
 
     this.client_ = null;
-    /** @private @const {!Preconnect} */
 
-    this.preconnect_ = new _preconnect.Preconnect(this.win_.document); // Prepare new verifier pair.
+    if (!(0, _experiments.isExperimentOn)(this.win_, _experimentFlags.ExperimentFlags.PAY_CLIENT_LAZYLOAD)) {
+      this.client_ = this.createClient_(
+      /** @type {!PaymentOptions} */
+      {
+        environment: 'SANDBOX',
+        'i': {
+          'redirectKey': this.redirectVerifierHelper_.restoreKey()
+        }
+      }, this.analytics_.getTransactionId(), this.handleResponse_.bind(this));
+    } else {
+      /** @private @const {!Preconnect} */
+      this.preconnect_ = new _preconnect.Preconnect(this.win_.document);
+    } // Prepare new verifier pair.
+
 
     this.redirectVerifierHelper_.prepare();
     /** @private @const {!./client-event-manager.ClientEventManager} */
@@ -14212,7 +13666,7 @@ var PayClient = /*#__PURE__*/function () {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       this.request_ = paymentRequest;
 
-      if (!this.client_) {
+      if ((0, _experiments.isExperimentOn)(this.win_, _experimentFlags.ExperimentFlags.PAY_CLIENT_LAZYLOAD) && !this.client_) {
         this.preconnect(this.preconnect_);
         this.client_ = this.createClient_(
         /** @type {!PaymentOptions} */
@@ -14560,7 +14014,7 @@ function setInternalParam(paymentRequest, param, value) {
   paymentRequest['i'] = Object.assign(paymentRequest['i'] || {}, _defineProperty({}, param, value));
 }
 
-},{"../../third_party/gpay/src/payjs_async":91,"../utils/bytes":69,"../utils/errors":74,"../utils/preconnect":80,"./services":60}],56:[function(require,module,exports){
+},{"../../third_party/gpay/src/payjs_async":87,"../utils/bytes":66,"../utils/errors":70,"../utils/preconnect":76,"./experiment-flags":42,"./experiments":43,"./services":57}],53:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -15068,7 +14522,7 @@ function parseSkuFromPurchaseDataSafe(purchaseData) {
   );
 }
 
-},{"../api/subscribe-response":12,"../api/subscriptions":13,"../api/user-data":14,"../proto/api_messages":33,"../ui/activity-iframe-view":64,"../utils/errors":74,"../utils/json":76,"../utils/jwt":77,"./services":60}],57:[function(require,module,exports){
+},{"../api/subscribe-response":11,"../api/subscriptions":12,"../api/user-data":13,"../proto/api_messages":32,"../ui/activity-iframe-view":61,"../utils/errors":70,"../utils/json":72,"../utils/jwt":73,"./services":57}],54:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -15390,7 +14844,7 @@ var PropensityServer = /*#__PURE__*/function () {
 
 exports.PropensityServer = PropensityServer;
 
-},{"../proto/api_messages":33,"../utils/types":84,"../utils/url":85,"./event-type-mapping":42,"./services":60}],58:[function(require,module,exports){
+},{"../proto/api_messages":32,"../utils/types":80,"../utils/url":81,"./event-type-mapping":41,"./services":57}],55:[function(require,module,exports){
 "use strict";
 
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
@@ -15535,7 +14989,7 @@ var Propensity = /*#__PURE__*/function () {
 
 exports.Propensity = Propensity;
 
-},{"../api/logger-api":8,"../api/propensity-api":11,"../proto/api_messages":33,"../utils/types":84,"./event-type-mapping":42,"./propensity-server":57}],59:[function(require,module,exports){
+},{"../api/logger-api":8,"../api/propensity-api":10,"../proto/api_messages":32,"../utils/types":80,"./event-type-mapping":41,"./propensity-server":54}],56:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -15589,8 +15043,6 @@ var _logger = require("./logger");
 var _loginNotificationApi = require("./login-notification-api");
 
 var _loginPromptApi = require("./login-prompt-api");
-
-var _meterRegwallApi = require("./meter-regwall-api");
 
 var _offersApi = require("./offers-api");
 
@@ -15866,9 +15318,9 @@ var Runtime = /*#__PURE__*/function () {
 
   }, {
     key: "getEntitlements",
-    value: function getEntitlements(params) {
+    value: function getEntitlements(encryptedDocumentKey) {
       return this.configured_(true).then(function (runtime) {
-        return runtime.getEntitlements(params);
+        return runtime.getEntitlements(encryptedDocumentKey);
       });
     }
     /** @override */
@@ -15941,15 +15393,6 @@ var Runtime = /*#__PURE__*/function () {
     value: function waitForSubscriptionLookup(accountPromise) {
       return this.configured_(true).then(function (runtime) {
         return runtime.waitForSubscriptionLookup(accountPromise);
-      });
-    }
-    /** @override */
-
-  }, {
-    key: "showMeterRegwall",
-    value: function showMeterRegwall(params) {
-      return this.configured_(true).then(function (runtime) {
-        return runtime.showMeterRegwall(params);
       });
     }
     /** @override */
@@ -16031,15 +15474,6 @@ var Runtime = /*#__PURE__*/function () {
     value: function setOnLoginRequest(callback) {
       return this.configured_(false).then(function (runtime) {
         return runtime.setOnLoginRequest(callback);
-      });
-    }
-    /** @override */
-
-  }, {
-    key: "triggerLoginRequest",
-    value: function triggerLoginRequest(request) {
-      return this.configured_(false).then(function (runtime) {
-        return runtime.triggerLoginRequest(request);
       });
     }
     /** @override */
@@ -16145,15 +15579,6 @@ var Runtime = /*#__PURE__*/function () {
     value: function getLogger() {
       return this.configured_(true).then(function (runtime) {
         return runtime.getLogger();
-      });
-    }
-    /** @override */
-
-  }, {
-    key: "getEventManager",
-    value: function getEventManager() {
-      return this.configured_(true).then(function (runtime) {
-        return runtime.getEventManager();
       });
     }
   }]);
@@ -16270,6 +15695,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
 
     _payFlow.PayCompleteFlow.configurePending(this);
 
+    if (!(0, _experiments.isExperimentOn)(this.win_, _experimentFlags.ExperimentFlags.PAY_CLIENT_LAZYLOAD)) {
+      this.payClient_.preconnect(preconnect);
+    }
+
     (0, _dom.injectStyleSheet)(this.doc_, _dialog.CSS); // Report redirect errors if any.
 
     this.activityPorts_.onRedirectError(function (error) {
@@ -16362,8 +15791,8 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
 
   }, {
     key: "init",
-    value: function init() {// Implemented by the `Runtime` class.
-    }
+    value: function init() {} // Implemented by the `Runtime` class.
+
     /** @override */
 
   }, {
@@ -16479,10 +15908,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
 
   }, {
     key: "getEntitlements",
-    value: function getEntitlements(params) {
+    value: function getEntitlements(encryptedDocumentKey) {
       var _this5 = this;
 
-      return this.entitlementsManager_.getEntitlements(params).then(function (entitlements) {
+      return this.entitlementsManager_.getEntitlements(encryptedDocumentKey).then(function (entitlements) {
         // Auto update internal things tracking the user's current SKU.
         if (entitlements) {
           try {
@@ -16593,28 +16022,9 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
     /** @override */
 
   }, {
-    key: "showMeterRegwall",
-    value: function showMeterRegwall(meterRegwallArgs) {
-      var _this12 = this;
-
-      return this.documentParsed_.then(function () {
-        var wait = new _meterRegwallApi.MeterRegwallApi(_this12, meterRegwallArgs);
-        return wait.start();
-      });
-    }
-    /** @override */
-
-  }, {
     key: "setOnLoginRequest",
     value: function setOnLoginRequest(callback) {
       this.callbacks_.setOnLoginRequest(callback);
-    }
-    /** @override */
-
-  }, {
-    key: "triggerLoginRequest",
-    value: function triggerLoginRequest(request) {
-      this.callbacks_.triggerLoginRequest(request);
     }
     /** @override */
 
@@ -16628,11 +16038,11 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "linkAccount",
     value: function linkAccount() {
-      var _this13 = this;
+      var _this12 = this;
 
       var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
       return this.documentParsed_.then(function () {
-        return new _linkAccountsFlow.LinkbackFlow(_this13).start(params);
+        return new _linkAccountsFlow.LinkbackFlow(_this12).start(params);
       });
     }
     /** @override */
@@ -16640,10 +16050,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "saveSubscription",
     value: function saveSubscription(saveSubscriptionRequestCallback) {
-      var _this14 = this;
+      var _this13 = this;
 
       return this.documentParsed_.then(function () {
-        return new _linkAccountsFlow.LinkSaveFlow(_this14, saveSubscriptionRequestCallback).start();
+        return new _linkAccountsFlow.LinkSaveFlow(_this13, saveSubscriptionRequestCallback).start();
       });
     }
     /** @override */
@@ -16651,10 +16061,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "showLoginPrompt",
     value: function showLoginPrompt() {
-      var _this15 = this;
+      var _this14 = this;
 
       return this.documentParsed_.then(function () {
-        return new _loginPromptApi.LoginPromptApi(_this15).start();
+        return new _loginPromptApi.LoginPromptApi(_this14).start();
       });
     }
     /** @override */
@@ -16662,10 +16072,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "showLoginNotification",
     value: function showLoginNotification() {
-      var _this16 = this;
+      var _this15 = this;
 
       return this.documentParsed_.then(function () {
-        return new _loginNotificationApi.LoginNotificationApi(_this16).start();
+        return new _loginNotificationApi.LoginNotificationApi(_this15).start();
       });
     }
     /** @override */
@@ -16694,12 +16104,12 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "subscribe",
     value: function subscribe(sku) {
-      var _this17 = this;
+      var _this16 = this;
 
       var errorMessage = 'The subscribe() method can only take a sku as its parameter; ' + 'for subscription updates please use the updateSubscription() method';
       (0, _log.assert)(typeof sku === 'string', errorMessage);
       return this.documentParsed_.then(function () {
-        return new _payFlow.PayStartFlow(_this17, {
+        return new _payFlow.PayStartFlow(_this16, {
           'skuId': sku
         }).start();
       });
@@ -16709,13 +16119,13 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "updateSubscription",
     value: function updateSubscription(subscriptionRequest) {
-      var _this18 = this;
+      var _this17 = this;
 
       (0, _log.assert)((0, _experiments.isExperimentOn)(this.win_, _experimentFlags.ExperimentFlags.REPLACE_SUBSCRIPTION), 'Not yet launched!');
       var errorMessage = 'The updateSubscription() method should be used for subscription ' + 'updates; for new subscriptions please use the subscribe() method';
       (0, _log.assert)(subscriptionRequest ? subscriptionRequest['oldSku'] : false, errorMessage);
       return this.documentParsed_.then(function () {
-        return new _payFlow.PayStartFlow(_this18, subscriptionRequest).start();
+        return new _payFlow.PayStartFlow(_this17, subscriptionRequest).start();
       });
     }
     /** @override */
@@ -16730,14 +16140,14 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "contribute",
     value: function contribute(skuOrSubscriptionRequest) {
-      var _this19 = this;
+      var _this18 = this;
 
       /** @type {!../api/subscriptions.SubscriptionRequest} */
       var request = typeof skuOrSubscriptionRequest == 'string' ? {
         'skuId': skuOrSubscriptionRequest
       } : skuOrSubscriptionRequest;
       return this.documentParsed_.then(function () {
-        return new _payFlow.PayStartFlow(_this19, request, _subscriptions.ProductType.UI_CONTRIBUTION).start();
+        return new _payFlow.PayStartFlow(_this18, request, _subscriptions.ProductType.UI_CONTRIBUTION).start();
       });
     }
     /** @override */
@@ -16745,10 +16155,10 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
   }, {
     key: "completeDeferredAccountCreation",
     value: function completeDeferredAccountCreation(options) {
-      var _this20 = this;
+      var _this19 = this;
 
       return this.documentParsed_.then(function () {
-        return new _deferredAccountFlow.DeferredAccountFlow(_this20, options || null).start();
+        return new _deferredAccountFlow.DeferredAccountFlow(_this19, options || null).start();
       });
     }
     /** @override */
@@ -16796,8 +16206,7 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
     value: function getPropensityModule() {
       return Promise.resolve(this.propensityModule_);
     }
-    /**
-     * This one exists as an internal helper so SwG logging doesn't require a promise.
+    /** @override
      * @return {!ClientEventManager}
      */
 
@@ -16805,15 +16214,6 @@ var ConfiguredRuntime = /*#__PURE__*/function () {
     key: "eventManager",
     value: function eventManager() {
       return this.eventManager_;
-    }
-    /**
-     * This one exists as a public API so publishers can subscribe to SwG events.
-     * @override */
-
-  }, {
-    key: "getEventManager",
-    value: function getEventManager() {
-      return Promise.resolve(this.eventManager_);
     }
     /** @override */
 
@@ -16851,7 +16251,6 @@ function createPublicRuntime(runtime) {
       showOffers: runtime.showOffers.bind(runtime),
       showUpdateOffers: runtime.showUpdateOffers.bind(runtime),
       showAbbrvOffer: runtime.showAbbrvOffer.bind(runtime),
-      showMeterRegwall: runtime.showMeterRegwall.bind(runtime),
       showSubscribeOption: runtime.showSubscribeOption.bind(runtime),
       showContributionOptions: runtime.showContributionOptions.bind(runtime),
       waitForSubscriptionLookup: runtime.waitForSubscriptionLookup.bind(runtime),
@@ -16861,7 +16260,6 @@ function createPublicRuntime(runtime) {
       completeDeferredAccountCreation: runtime.completeDeferredAccountCreation.bind(runtime),
       setOnEntitlementsResponse: runtime.setOnEntitlementsResponse.bind(runtime),
       setOnLoginRequest: runtime.setOnLoginRequest.bind(runtime),
-      triggerLoginRequest: runtime.triggerLoginRequest.bind(runtime),
       setOnLinkComplete: runtime.setOnLinkComplete.bind(runtime),
       setOnNativeSubscribeRequest: runtime.setOnNativeSubscribeRequest.bind(runtime),
       setOnPaymentResponse: runtime.setOnPaymentResponse.bind(runtime),
@@ -16874,8 +16272,7 @@ function createPublicRuntime(runtime) {
       attachButton: runtime.attachButton.bind(runtime),
       attachSmartButton: runtime.attachSmartButton.bind(runtime),
       getPropensityModule: runtime.getPropensityModule.bind(runtime),
-      getLogger: runtime.getLogger.bind(runtime),
-      getEventManager: runtime.getEventManager.bind(runtime)
+      getLogger: runtime.getLogger.bind(runtime)
     }
   );
 }
@@ -16904,7 +16301,7 @@ function getDocClassForTesting() {
   return _doc.Doc;
 }
 
-},{"../../build/css/components/dialog.css":1,"../api/subscriptions":13,"../components/activities":15,"../components/dialog-manager":16,"../model/doc":22,"../model/page-config":24,"../model/page-config-resolver":23,"../proto/api_messages":33,"../utils/dom":72,"../utils/log":78,"../utils/preconnect":80,"../utils/types":84,"./analytics-service":34,"./button-api":35,"./callbacks":36,"./client-event-manager":37,"./contributions-flow":38,"./deferred-account-flow":39,"./deps":40,"./entitlements-manager":41,"./experiment-flags":43,"./experiments":44,"./fetcher":45,"./jserror":46,"./link-accounts-flow":47,"./logger":48,"./login-notification-api":49,"./login-prompt-api":50,"./meter-regwall-api":51,"./offers-api":53,"./offers-flow":54,"./pay-client":55,"./pay-flow":56,"./propensity":58,"./storage":62,"./wait-for-subscription-lookup-api":63}],60:[function(require,module,exports){
+},{"../../build/css/components/dialog.css":1,"../api/subscriptions":12,"../components/activities":14,"../components/dialog-manager":15,"../model/doc":21,"../model/page-config":23,"../model/page-config-resolver":22,"../proto/api_messages":32,"../utils/dom":68,"../utils/log":74,"../utils/preconnect":76,"../utils/types":80,"./analytics-service":33,"./button-api":34,"./callbacks":35,"./client-event-manager":36,"./contributions-flow":37,"./deferred-account-flow":38,"./deps":39,"./entitlements-manager":40,"./experiment-flags":42,"./experiments":43,"./fetcher":44,"./jserror":45,"./link-accounts-flow":46,"./logger":47,"./login-notification-api":48,"./login-prompt-api":49,"./offers-api":50,"./offers-flow":51,"./pay-client":52,"./pay-flow":53,"./propensity":55,"./storage":59,"./wait-for-subscription-lookup-api":60}],57:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17016,7 +16413,7 @@ function feCached(url) {
 
 function feArgs(args) {
   return Object.assign(args, {
-    '_client': 'SwG 0.1.22-1602710098364'
+    '_client': 'SwG 0.1.22-1603842716914'
   });
 }
 /**
@@ -17041,7 +16438,7 @@ function cacheParam(cacheKey) {
   return String(period <= 1 ? now : Math.floor(now / period));
 }
 
-},{"../utils/url":85}],61:[function(require,module,exports){
+},{"../utils/url":81}],58:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17187,7 +16584,7 @@ var SmartSubscriptionButtonApi = /*#__PURE__*/function () {
 
 exports.SmartSubscriptionButtonApi = SmartSubscriptionButtonApi;
 
-},{"../proto/api_messages":33,"../utils/dom":72,"../utils/style":83,"./services":60}],62:[function(require,module,exports){
+},{"../proto/api_messages":32,"../utils/dom":68,"../utils/style":79,"./services":57}],59:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17320,7 +16717,7 @@ function storageKey(key) {
   return PREFIX + ':' + key;
 }
 
-},{}],63:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17408,7 +16805,7 @@ var WaitForSubscriptionLookupApi = /*#__PURE__*/function () {
 
 exports.WaitForSubscriptionLookupApi = WaitForSubscriptionLookupApi;
 
-},{"../api/deferred-account-creation":6,"../ui/activity-iframe-view":64,"./services":60}],64:[function(require,module,exports){
+},{"../api/deferred-account-creation":6,"../ui/activity-iframe-view":61,"./services":57}],61:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17434,19 +16831,15 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
-
-function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
-
-function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = _getPrototypeOf(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = _getPrototypeOf(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return _possibleConstructorReturn(this, result); }; }
-
 function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
 
 function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
-function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
-
 function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
+
+function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) { o.__proto__ = p; return o; }; return _setPrototypeOf(o, p); }
 
 /** @const {!Object<string, string>} */
 var iframeAttributes = {
@@ -17459,8 +16852,6 @@ var iframeAttributes = {
 
 var ActivityIframeView = /*#__PURE__*/function (_View) {
   _inherits(ActivityIframeView, _View);
-
-  var _super = _createSuper(ActivityIframeView);
 
   /**
    * @param {!Window} win
@@ -17478,7 +16869,7 @@ var ActivityIframeView = /*#__PURE__*/function (_View) {
 
     _classCallCheck(this, ActivityIframeView);
 
-    _this = _super.call(this);
+    _this = _possibleConstructorReturn(this, _getPrototypeOf(ActivityIframeView).call(this));
     /** @private @const {!Window} */
 
     _this.win_ = win;
@@ -17683,7 +17074,7 @@ var ActivityIframeView = /*#__PURE__*/function (_View) {
 
 exports.ActivityIframeView = ActivityIframeView;
 
-},{"../components/view":20,"../proto/api_messages":33,"../utils/activity-utils":67,"../utils/dom":72,"../utils/errors":74}],65:[function(require,module,exports){
+},{"../components/view":19,"../proto/api_messages":32,"../utils/activity-utils":64,"../utils/dom":68,"../utils/errors":70}],62:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17775,7 +17166,7 @@ var LoadingView = /*#__PURE__*/function () {
 
 exports.LoadingView = LoadingView;
 
-},{"../utils/dom":72}],66:[function(require,module,exports){
+},{"../utils/dom":68}],63:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -17964,7 +17355,7 @@ var Toast = /*#__PURE__*/function () {
 
 exports.Toast = Toast;
 
-},{"../utils/animation":68,"../utils/dom":72,"../utils/style":83}],67:[function(require,module,exports){
+},{"../utils/animation":65,"../utils/dom":68,"../utils/style":79}],64:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18005,7 +17396,7 @@ function acceptPortResultData(port, requireOrigin, requireOriginVerified, requir
   });
 }
 
-},{}],68:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18057,7 +17448,7 @@ function transition(el, props, durationMillis, curve) {
   });
 }
 
-},{"./style":83}],69:[function(require,module,exports){
+},{"./style":79}],66:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18201,41 +17592,7 @@ function base64UrlEncodeFromBytes(bytes) {
   });
 }
 
-},{"./log":78}],70:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.toTimestamp = toTimestamp;
-
-var _api_messages = require("../proto/api_messages");
-
-/**
- * Copyright 2020 The Subscribe with Google Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * @param {!number} millis
- * @return {!Timestamp}
- */
-function toTimestamp(millis) {
-  return new _api_messages.Timestamp([Math.floor(millis / 1000), millis % 1000 * 1000000], false);
-}
-
-},{"../proto/api_messages":33}],71:[function(require,module,exports){
+},{"./log":74}],67:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18356,7 +17713,7 @@ function whenDocumentComplete(doc) {
   });
 }
 
-},{}],72:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18554,7 +17911,7 @@ function isLegacyEdgeBrowser(win) {
   return /Edge/i.test(nav && nav.userAgent);
 }
 
-},{"./log":78,"./style":83}],73:[function(require,module,exports){
+},{"./log":74,"./style":79}],69:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18767,7 +18124,7 @@ var dev = function dev() {
 
 exports.dev = dev;
 
-},{}],74:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18834,7 +18191,7 @@ var ErrorUtils = /*#__PURE__*/function () {
 
 exports.ErrorUtils = ErrorUtils;
 
-},{"web-activities/activity-ports":4}],75:[function(require,module,exports){
+},{"web-activities/activity-ports":4}],71:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -18922,7 +18279,7 @@ function getLanguageCodeFromElement(element) {
   return DEFAULT_LANGUAGE_CODE;
 }
 
-},{}],76:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19004,7 +18361,7 @@ function getPropertyFromJsonString(jsonString, propertyName) {
   return json && json[propertyName] || null;
 }
 
-},{}],77:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19094,7 +18451,7 @@ var JwtHelper = /*#__PURE__*/function () {
 
 exports.JwtHelper = JwtHelper;
 
-},{"./bytes":69,"./json":76}],78:[function(require,module,exports){
+},{"./bytes":66,"./json":72}],74:[function(require,module,exports){
 "use strict";
 
 /**
@@ -19227,7 +18584,7 @@ module.exports = {
   log: log
 };
 
-},{}],79:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19299,7 +18656,7 @@ function findInArray(array, predicate) {
   return null;
 }
 
-},{}],80:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19392,7 +18749,7 @@ var Preconnect = /*#__PURE__*/function () {
 
 exports.Preconnect = Preconnect;
 
-},{"./dom":72}],81:[function(require,module,exports){
+},{"./dom":68}],77:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19444,7 +18801,7 @@ function getRandomInts(numInts, maxVal) {
   return arr;
 }
 
-},{}],82:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -19458,11 +18815,8 @@ exports.expandTemplate = expandTemplate;
 exports.stringHash32 = stringHash32;
 exports.getUuid = getUuid;
 exports.getSwgTransactionId = getSwgTransactionId;
-exports.hash = hash;
 
 var _random = require("./random");
-
-var _bytes = require("./bytes");
 
 /**
  * Copyright 2018 The Subscribe with Google Authors. All Rights Reserved.
@@ -19655,49 +19009,8 @@ function getUuid() {
 function getSwgTransactionId() {
   return getUuid() + '.swg';
 }
-/**
- * Returns a string whose length matches the length of format.
- * @param {string} str
- * @param {string} format
- * @return {string}
- */
 
-
-function padString(str, format) {
-  return (format + str).slice(-format.length);
-}
-
-var PADDING = '00000000';
-
-function toHex(buffer) {
-  var hexCodes = [];
-  var view = new DataView(buffer);
-
-  for (var i = 0; i < view.byteLength; i += 4) {
-    // toString(16) will give the hex representation of the number without padding
-    var stringValue = view.getUint32(i).toString(16);
-    hexCodes.push(padString(stringValue, PADDING));
-  }
-
-  return hexCodes.join('');
-}
-/**
- * Returns a hexadecimal 128 character string that is the
- * SHA-512 hash of the passed string.
- * @param {string} stringToHash
- * @return {!Promise<string>}
- */
-
-
-function hash(stringToHash) {
-  var crypto = self.crypto || self.msCrypto;
-  var subtle = crypto.subtle;
-  return subtle.digest('SHA-512', (0, _bytes.utf8EncodeSync)(stringToHash)).then(function (digest) {
-    return toHex(digest);
-  });
-}
-
-},{"./bytes":69,"./random":81}],83:[function(require,module,exports){
+},{"./random":77}],79:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20155,7 +19468,7 @@ function resetAllStyles(element) {
   setImportantStyles(element, defaultStyles);
 }
 
-},{"./object.js":79,"./string":82}],84:[function(require,module,exports){
+},{"./object.js":75,"./string":78}],80:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20231,7 +19544,7 @@ function isBoolean(value) {
   return typeof value === 'boolean';
 }
 
-},{}],85:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20243,7 +19556,6 @@ exports.parseQueryString = parseQueryString;
 exports.addQueryParam = addQueryParam;
 exports.serializeProtoMessageForUrl = serializeProtoMessageForUrl;
 exports.getHostUrl = getHostUrl;
-exports.getCanonicalUrl = getCanonicalUrl;
 
 /**
  * Copyright 2018 The Subscribe with Google Authors. All Rights Reserved.
@@ -20478,18 +19790,8 @@ function getHostUrl(url) {
   var locationHref = parseUrl(url);
   return locationHref.origin + locationHref.pathname + locationHref.search;
 }
-/**
- * @param {!../model/doc.Doc} doc
- * @return {string}
- */
 
-
-function getCanonicalUrl(doc) {
-  var node = doc.getRootNode().querySelector("link[rel='canonical']");
-  return node && node.href || '';
-}
-
-},{}],86:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20930,7 +20232,7 @@ var FetchResponseHeaders = /*#__PURE__*/function () {
 
 exports.FetchResponseHeaders = FetchResponseHeaders;
 
-},{"./bytes":69,"./json":76,"./log":78,"./url":85}],87:[function(require,module,exports){
+},{"./bytes":66,"./json":72,"./log":74,"./url":81}],83:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21121,7 +20423,7 @@ Constants.GPAY_BUTTON_CARD_INFO_BUTTON_STYLE = "\n  .".concat(Constants.GPAY_BUT
 
 Constants.TRUSTED_DOMAIN = '.google.com';
 
-},{}],88:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21190,7 +20492,7 @@ function injectIframe(iframeClassName) {
   };
 }
 
-},{"./constants.js":87}],89:[function(require,module,exports){
+},{"./constants.js":83}],85:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21344,7 +20646,7 @@ function transition(el, props, durationMillis, curve) {
   });
 }
 
-},{"./constants.js":87}],90:[function(require,module,exports){
+},{"./constants.js":83}],86:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21739,7 +21041,7 @@ var PayFrameHelper = /*#__PURE__*/function () {
 
 exports.PayFrameHelper = PayFrameHelper;
 
-},{"./constants.js":87,"./post_message_service.js":95}],91:[function(require,module,exports){
+},{"./constants.js":83,"./post_message_service.js":91}],87:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22240,7 +21542,7 @@ function isNativeDisabledInRequest(request) {
   return (request['i'] && request['i']['disableNative']) === true;
 }
 
-},{"./constants.js":87,"./pay_frame_helper.js":90,"./payments_client_delegate_interface.js":92,"./payments_request_delegate.js":93,"./payments_web_activity_delegate.js":94,"./upi_handler.js":96,"./utils.js":97,"./validator.js":98,"web-activities/activity-ports":4}],92:[function(require,module,exports){
+},{"./constants.js":83,"./pay_frame_helper.js":86,"./payments_client_delegate_interface.js":88,"./payments_request_delegate.js":89,"./payments_web_activity_delegate.js":90,"./upi_handler.js":92,"./utils.js":93,"./validator.js":94,"web-activities/activity-ports":4}],88:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22328,7 +21630,7 @@ var PaymentsClientDelegateInterface = /*#__PURE__*/function () {
 
 exports.PaymentsClientDelegateInterface = PaymentsClientDelegateInterface;
 
-},{}],93:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22514,7 +21816,7 @@ var PaymentsRequestDelegate = /*#__PURE__*/function () {
 
 exports.PaymentsRequestDelegate = PaymentsRequestDelegate;
 
-},{"./constants.js":87,"./payments_client_delegate_interface.js":92}],94:[function(require,module,exports){
+},{"./constants.js":83,"./payments_client_delegate_interface.js":88}],90:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -23257,7 +22559,7 @@ var PaymentsWebActivityDelegate = /*#__PURE__*/function () {
 
 exports.PaymentsWebActivityDelegate = PaymentsWebActivityDelegate;
 
-},{"./constants.js":87,"./element_injector.js":88,"./graypane.js":89,"./pay_frame_helper.js":90,"./payments_client_delegate_interface.js":92,"./validator.js":98,"web-activities/activity-ports":4}],95:[function(require,module,exports){
+},{"./constants.js":83,"./element_injector.js":84,"./graypane.js":85,"./pay_frame_helper.js":86,"./payments_client_delegate_interface.js":88,"./validator.js":94,"web-activities/activity-ports":4}],91:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -23320,7 +22622,7 @@ var PostMessageService = /*#__PURE__*/function () {
 
 exports.PostMessageService = PostMessageService;
 
-},{}],96:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -23622,7 +22924,7 @@ var UpiHandler = /*#__PURE__*/function () {
 
 exports.UpiHandler = UpiHandler;
 
-},{"./constants.js":87,"./pay_frame_helper.js":90,"./validator.js":98}],97:[function(require,module,exports){
+},{"./constants.js":83,"./pay_frame_helper.js":86,"./validator.js":94}],93:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -23661,7 +22963,7 @@ function createGoogleTransactionId(environment) {
   return _RandomUuid["default"].uuidFast() + '.' + environment;
 }
 
-},{"../third_party/random_uuid/Random.uuid.js":99}],98:[function(require,module,exports){
+},{"../third_party/random_uuid/Random.uuid.js":95}],94:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -24021,7 +23323,7 @@ function getAllowedPaymentMethodForType_(isReadyToPayRequest, paymentMethodType)
   return null;
 }
 
-},{"./constants.js":87}],99:[function(require,module,exports){
+},{"./constants.js":83}],95:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -24135,6 +23437,6 @@ Random_uuid.uuidCompact = function () {
   });
 };
 
-},{}]},{},[21])
+},{}]},{},[20])
 
 })();//# sourceMappingURL=subscriptions.max.js.map
